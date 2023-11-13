@@ -1,6 +1,7 @@
 import os
 import logging
 import psycopg2
+from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
@@ -88,7 +89,8 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         size = float(context.args[0])
-        expiration_date = context.args[1]
+        input_date = datetime.strptime(context.args[1], '%d.%m.%Y')
+        expiration_date = input_date.strftime('%Y-%m-%d')
         buyer_name = " ".join(filter(None, [update.effective_user.first_name, update.effective_user.last_name]))
         if not buyer_name:
             buyer_name = update.effective_user.username or str(update.effective_user.id)
@@ -131,7 +133,7 @@ async def tilanne(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         milk_amount, milk_expiration_date = check_milk_status()
         if milk_amount > 0:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Olkkarilla on maitoa. Vanhentumispäivä: {milk_expiration_date}, purkin koko {milk_amount} litraa.")
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Olkkarilla on maitoa. Vanhentumispäivä: {datetime.strptime(milk_expiration_date, '%Y-%m-%d').strftime('%d.%m.%Y')}, purkin koko {milk_amount} litraa.")
         else:
             await context.bot.send_message(chat_id=update.effective_chat.id, text="Ei maitoa Olkkarilla!")
     except (IndexError, ValueError, TypeError, KeyError, Exception) as e:
