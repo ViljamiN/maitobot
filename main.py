@@ -217,7 +217,7 @@ def main() -> None:
     empty_handler = CommandHandler('kellota', empty)
     tilanne_handler = CommandHandler('tilanne', tilanne)
     leaderboard_handler = CommandHandler('leaderboard', leaderboard)
-    reply_keyboard_handler = MessageHandler(filters.Text & filters.Command, handle_selected_milk)
+    reply_keyboard_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, handle_selected_milk)
 
     application.add_handler(start_handler)
     application.add_handler(help_handler)
