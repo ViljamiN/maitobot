@@ -92,11 +92,12 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not buyer_name:
             buyer_name = update.effective_user.username or str(update.effective_user.id)
         add_milk(buyer_name, size, expiration_date)
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Maitoa ostettu!\nOstaja: {buyer_name}\nKoko: {size} litraa\nVanhentumispäivä: {expiration_date}")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Maitoa ostettu!\nOstaja: {buyer_name}\nKoko: {size} litraa\nVanhentumispäivä: {input_date}")
     except ValueError as e:
         logging.error(f"Error processing /osta command: {e}")
         await context.bot.send_message(chat_id=update.effective_chat.id, text="Virheellinen syöte. Käyttö: /osta <koko litroissa> <vanhentumispäivä (dd.mm.yyyy)>")
-    except IndexError:
+    except IndexError as e:
+        logging.error(f"Error processing /osta command: {e}")
         await context.bot.send_message(chat_id=update.effective_chat.id, text="Puuttuva syöte. Käyttö: /osta <koko litroissa> <vanhentumispäivä (dd.mm.yyyy)>")
     except Exception as e:
         logging.error(f"Error processing /osta command: {e}")
@@ -106,8 +107,8 @@ async def drink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         drinker_name = " ".join(filter(None, [update.effective_user.first_name, update.effective_user.last_name]))
         if not drinker_name:
             drinker_name = update.effective_user.username or str(update.effective_user.id)
-        milk_amount, _ = check_milk_status()
-        if milk_amount > 0:
+        non_empty_milks = check_milk_status()
+        if non_empty_milks:
             drink_milk(drinker_name, 1)
             await context.bot.send_message(chat_id=update.effective_chat.id, text="Joit maitoa! Hyvä sinä!")
         else:
@@ -144,9 +145,11 @@ async def handle_selected_milk(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def tilanne(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
-        milk_amount, milk_expiration_date = check_milk_status()
-        if milk_amount > 0:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Olkkarilla on maitoa. Vanhentumispäivä: {milk_expiration_date.strftime('%d.%m.%Y')}, purkin koko {milk_amount} litraa.")
+        non_empty_milks = check_milk_status()
+        if non_empty_milks:
+            message = "Maitotilanne:\n"
+            message += "\n".join([f"{milk_id}: {remaining_amount}L - vanhenee {expiration_date.strftime('%d.%m.%Y')}" for milk_id, remaining_amount, expiration_date in non_empty_milks])
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
         else:
             await context.bot.send_message(chat_id=update.effective_chat.id, text="Ei maitoa Olkkarilla!")
     except (IndexError, ValueError, TypeError, KeyError, Exception) as e:
