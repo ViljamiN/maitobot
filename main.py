@@ -2,8 +2,8 @@ import os
 import logging
 import psycopg2
 from datetime import datetime
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -15,16 +15,15 @@ def check_milk_status():
         DATABASE_URL = os.environ.get('DATABASE_URL')
         conn = psycopg2.connect(DATABASE_URL, sslmode='require')
         cursor = conn.cursor()
-        cursor.execute("SELECT amount, expiration_date FROM milk WHERE amount > 0 ORDER BY expiration_date LIMIT 1")
-        row = cursor.fetchone()
-        if row:
-            remaining_amount, expiration_date = row
-            return remaining_amount, expiration_date
+        cursor.execute("SELECT id, amount, expiration_date FROM milk WHERE amount > 0 ORDER BY expiration_date")
+        rows = cursor.fetchall()
+        if rows:
+            return [(milk_id, remaining_amount, expiration_date) for milk_id, remaining_amount, expiration_date in rows]
         else:
-            return 0, None
+            return []
     except psycopg2.Error as e:
         logging.error("Error checking milk status:", e)
-        return None, None
+        return []
     finally:
         cursor.close()
         conn.close()
@@ -59,14 +58,12 @@ def drink_milk(drinker_name, amount):
         cursor.close()
         conn.close()
 
-def empty_milk():
+def empty_milk(milk_id):
     try:
         DATABASE_URL = os.environ.get('DATABASE_URL')
         conn = psycopg2.connect(DATABASE_URL, sslmode='require')
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM milk WHERE amount > 0 ORDER BY expiration_date LIMIT 1 FOR UPDATE")
-        milk_id = cursor.fetchone()
-        cursor.execute("UPDATE milk SET amount = 0 WHERE id = %s", (milk_id))
+        cursor.execute("UPDATE milk SET amount = 0 WHERE id = %s", (milk_id,))
         conn.commit()
     except psycopg2.Error as e:
         logging.error("Error emptying milk:", e)
@@ -120,14 +117,30 @@ async def drink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def empty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
-        milk_amount, _ = check_milk_status()
-        if milk_amount > 0:
-            empty_milk()
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Maito tyhjennetty!")
+        non_empty_milks = check_milk_status()
+        if non_empty_milks:
+            keyboard_buttons = [
+                [KeyboardButton(f"{milk_id}: {remaining_amount}L - vanhenee {expiration_date.strftime('%d.%m.%Y')}")]
+                for milk_id, remaining_amount, expiration_date in non_empty_milks
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard_buttons, resize_keyboard=True, one_time_keyboard=True)
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Valitse tyhjennettävä maito:",
+                reply_markup=reply_markup
+            )
         else:
             await context.bot.send_message(chat_id=update.effective_chat.id, text="Ei siellä pitäisi olla maitoa tyhjennettäväksi!")
     except Exception as e:
         logging.error(f"Error processing /kellota command: {e}")
+
+async def handle_selected_milk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        selected_milk = update.message.text.split(':')[0].strip()
+        empty_milk(selected_milk)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="Maito tyhjennetty!")
+    except Exception as e:
+        logging.error(f"Error handling selected milk bottle: {e}")
 
 async def tilanne(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
@@ -201,6 +214,7 @@ def main() -> None:
     empty_handler = CommandHandler('kellota', empty)
     tilanne_handler = CommandHandler('tilanne', tilanne)
     leaderboard_handler = CommandHandler('leaderboard', leaderboard)
+    reply_keyboard_handler = MessageHandler(filters.text & ~filters.command, handle_selected_milk)
 
     application.add_handler(start_handler)
     application.add_handler(help_handler)
@@ -209,7 +223,8 @@ def main() -> None:
     application.add_handler(empty_handler)
     application.add_handler(tilanne_handler)
     application.add_handler(leaderboard_handler)
-    
+    application.add_handler(reply_keyboard_handler)
+
     application.run_polling()
 
 main()
