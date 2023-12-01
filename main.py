@@ -141,20 +141,17 @@ async def handle_selected_milk(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         selected_milk = update.message.text.split(':')[0].strip()
         if selected_milk == "Peruuta":
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="Tyhjennys peruutettu!", reply_markup=ReplyKeyboardRemove())
-            if 'empty_milk_message_id' in context.user_data:
-                await context.bot.edit_message_reply_markup(chat_id=update.effective_chat.id,
-                                                            message_id=context.user_data['empty_milk_message_id'],
-                                                            reply_markup=None)
-                del context.user_data['empty_milk_message_id']
+            try:
+                await context.bot.send_message(chat_id=update.effective_chat.id, text="Tyhjennys peruutettu!", reply_markup=ReplyKeyboardRemove())
+            except Exception as send_error:
+                logging.error(f"Error sending cancel message: {send_error}")
         else:
             empty_milk(selected_milk)
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="Maito tyhjennetty!", reply_markup=ReplyKeyboardRemove())
-            if 'empty_milk_message_id' in context.user_data:
-                await context.bot.edit_message_reply_markup(chat_id=update.effective_chat.id,
-                                                            message_id=context.user_data['empty_milk_message_id'],
-                                                            reply_markup=None)
-                del context.user_data['empty_milk_message_id']
+            try:
+                await context.bot.send_message(chat_id=update.effective_chat.id, text="Maito tyhjennetty!", reply_markup=ReplyKeyboardRemove())
+            except Exception as send_error:
+                logging.error(f"Error sending confirmation message: {send_error}")
+        del context.user_data['empty_milk_message_id']
     except Exception as e:
         logging.error(f"Error handling selected milk bottle: {e}")
 
