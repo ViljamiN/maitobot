@@ -139,6 +139,10 @@ async def empty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def handle_selected_milk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
+        if 'empty_milk_message_id' not in context.user_data:
+            # No ongoing emptying process, ignore the message
+            return
+
         selected_milk = update.message.text.split(':')[0].strip()
         if selected_milk == "Peruuta":
             try:
@@ -151,6 +155,7 @@ async def handle_selected_milk(update: Update, context: ContextTypes.DEFAULT_TYP
                 await context.bot.send_message(chat_id=update.effective_chat.id, text="Maito tyhjennetty!", reply_markup=ReplyKeyboardRemove())
             except Exception as send_error:
                 logging.error(f"Error sending confirmation message: {send_error}")
+        # Remove the ongoing emptying process flag
         del context.user_data['empty_milk_message_id']
     except Exception as e:
         logging.error(f"Error handling selected milk bottle: {e}")
