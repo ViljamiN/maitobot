@@ -2,7 +2,7 @@ import os
 import logging
 import psycopg2
 from datetime import datetime
-from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
+from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 logging.basicConfig(
@@ -92,7 +92,7 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not buyer_name:
             buyer_name = update.effective_user.username or str(update.effective_user.id)
         add_milk(buyer_name, size, expiration_date)
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Maitoa ostettu!\nOstaja: {buyer_name}\nKoko: {size} litraa\nVanhentumispäivä: {input_date}")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Maitoa ostettu!\nOstaja: {buyer_name}\nKoko: {size} litraa\nVanhentumispäivä: {input_date.strftime('%d.%m.%Y')}")
     except ValueError as e:
         logging.error(f"Error processing /osta command: {e}")
         await context.bot.send_message(chat_id=update.effective_chat.id, text="Virheellinen syöte. Käyttö: /osta <koko litroissa> <vanhentumispäivä (dd.mm.yyyy)>")
@@ -124,12 +124,14 @@ async def empty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 [KeyboardButton(f"{milk_id}: {remaining_amount}L - vanhenee {expiration_date.strftime('%d.%m.%Y')}")]
                 for milk_id, remaining_amount, expiration_date in non_empty_milks
             ]
+            keyboard_buttons.append([KeyboardButton("Peruuta")])
             reply_markup = ReplyKeyboardMarkup(keyboard_buttons, resize_keyboard=True, one_time_keyboard=True)
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="Valitse tyhjennettävä maito:",
                 reply_markup=reply_markup
             )
+            context.user_data['empty_milk_message_id'] = update.message.message_id
         else:
             await context.bot.send_message(chat_id=update.effective_chat.id, text="Ei siellä pitäisi olla maitoa tyhjennettäväksi!")
     except Exception as e:
@@ -138,8 +140,21 @@ async def empty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_selected_milk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         selected_milk = update.message.text.split(':')[0].strip()
-        empty_milk(selected_milk)
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="Maito tyhjennetty!")
+        if selected_milk == "Peruuta":
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="Tyhjennys peruutettu!", reply_markup=ReplyKeyboardRemove())
+            if 'empty_milk_message_id' in context.user_data:
+                await context.bot.edit_message_reply_markup(chat_id=update.effective_chat.id,
+                                                            message_id=context.user_data['empty_milk_message_id'],
+                                                            reply_markup=None)
+                del context.user_data['empty_milk_message_id']
+        else:
+            empty_milk(selected_milk)
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="Maito tyhjennetty!", reply_markup=ReplyKeyboardRemove())
+            if 'empty_milk_message_id' in context.user_data:
+                await context.bot.edit_message_reply_markup(chat_id=update.effective_chat.id,
+                                                            message_id=context.user_data['empty_milk_message_id'],
+                                                            reply_markup=None)
+                del context.user_data['empty_milk_message_id']
     except Exception as e:
         logging.error(f"Error handling selected milk bottle: {e}")
 
