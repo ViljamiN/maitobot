@@ -1,6 +1,7 @@
 import os
 import logging
 import psycopg2
+from dotenv import load_dotenv
 from datetime import datetime
 from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
@@ -9,6 +10,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+
+load_dotenv() 
 
 def check_milk_status():
     try:
